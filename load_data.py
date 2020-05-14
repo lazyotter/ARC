@@ -35,12 +35,12 @@ class Data(object):
 
 		return data
 
-	def get_train_test(self, key):
-		X_train = {}
-		Y_train = {}
-		X_test = {}
-		Y_test = {}
-
+	def get_train_test(self, data):
+		x_t = [x['input'] for x in data['train']]
+		y_t = [x['output'] for x in data['train']]
+		x_v = [x['input'] for x in data['test']]
+		y_v = [x['output'] for x in data['test']]
+		return x_t, y_t, x_v, y_v
 
 
 	def visualize(self, data):

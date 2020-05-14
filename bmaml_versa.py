@@ -101,7 +101,11 @@ class Bmaml(object):
 			lr = self.meta_lr)
 
 	def meta_train(self, train_subset='train'):
-		data_loader = Data('./data')
+		if train_subset == 'train':
+			train_data_loader = Data('./data', 'train')
+			train_data = train_data_loader.get_data()
+		keys = train_data_loader.keys
+
 
 		print('Start to train...')
 		for epoch in range(0, self.num_epochs):
@@ -121,83 +125,79 @@ class Bmaml(object):
 
 			task_count = 0
 
-			while (task_count < self.num_tasks_per_epoch):
-				for class_labels in train_loader:
-					#print class labels probably
-					x_t, y_t, x_v, y_v = get_task_sine_data(
-						data_generator=data_generator,
-						p_sine = self.p_sine,
-						num_training_samples=self.num_training_samples_per_class,
-						noise_flag = True)
+			#change to maybe do multiple tasks
+			for key in keys:
+				padded_data = train_data_loader.pad(train_data[key])
+				x_t, y_t, x_v, y_v = train_data_loader.get_train_test(padded_data)
 
-					chaser, leader, y_pred = self.get_task_prediction(x_t, y_t, x_v, y_v)
-					loss_NLL = self.get_meta_loss(chaser, leader)
+				chaser, leader, y_pred = self.get_task_prediction(x_t, y_t, x_v, y_v)
+				loss_NLL = self.get_meta_loss(chaser, leader)
 
-					if torch.isnan(loss_NLL).item():
-						sys.exit('NaN error')
+				if torch.isnan(loss_NLL).item():
+					sys.exit('NaN error')
 
-					meta_loss = meta_loss + loss_NLL
-					#meta_mse = self.loss(y_pred, y_v)
+				meta_loss = meta_loss + loss_NLL
+				#meta_mse = self.loss(y_pred, y_v)
 
-					task_count = task_count + 1
+				task_count = task_count + 1
 
-					if task_count % self.num_tasks_per_minibatch == 0:
-						meta_loss = meta_loss/self.num_tasks_per_minibatch
-						#meta_mse = meta_mse/self.num_tasks_per_minibatch
+				if task_count % self.num_tasks_per_minibatch == 0:
+					meta_loss = meta_loss/self.num_tasks_per_minibatch
+					#meta_mse = meta_mse/self.num_tasks_per_minibatch
 
-						# accumulate into different variables for printing purpose
-						meta_loss_avg_print += meta_loss.item()
-						#meta_mse_avg_print += meta_mse.item()
+					# accumulate into different variables for printing purpose
+					meta_loss_avg_print += meta_loss.item()
+					#meta_mse_avg_print += meta_mse.item()
 
-						self.op_theta.zero_grad()
-						meta_loss.backward()
-						self.op_theta.step()
+					self.op_theta.zero_grad()
+					meta_loss.backward()
+					self.op_theta.step()
 
-						# Printing losses
-						num_meta_updates_count += 1
-						if (num_meta_updates_count % self.num_meta_updates_print == 0):
-							meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
-							#meta_mse_avg_save.append(meta_mse_avg_print/num_meta_updates_count)
-							print('{0:d}, {1:2.4f}, {1:2.4f}'.format(
-								task_count,
-								meta_loss_avg_save[-1]
-								#meta_mse_avg_save[-1]
-							))
+					# Printing losses
+					num_meta_updates_count += 1
+					if (num_meta_updates_count % self.num_meta_updates_print == 0):
+						meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
+						#meta_mse_avg_save.append(meta_mse_avg_print/num_meta_updates_count)
+						print('{0:d}, {1:2.4f}, {1:2.4f}'.format(
+							task_count,
+							meta_loss_avg_save[-1]
+							#meta_mse_avg_save[-1]
+						))
 
-							num_meta_updates_count = 0
-							meta_loss_avg_print = 0
-							#meta_mse_avg_print = 0
-						
-						if (task_count % self.num_tasks_save_loss == 0):
-							meta_loss_saved.append(np.mean(meta_loss_avg_save))
+						num_meta_updates_count = 0
+						meta_loss_avg_print = 0
+						#meta_mse_avg_print = 0
+					
+					if (task_count % self.num_tasks_save_loss == 0):
+						meta_loss_saved.append(np.mean(meta_loss_avg_save))
 
-							meta_loss_avg_save = []
-							#meta_mse_avg_save = []
+						meta_loss_avg_save = []
+						#meta_mse_avg_save = []
 
-							# print('Saving loss...')
-							# val_accs, _ = meta_validation(
-							#     datasubset=val_set,
-							#     num_val_tasks=num_val_tasks,
-							#     return_uncertainty=False)
-							# val_acc = np.mean(val_accs)
-							# val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
-							# print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
-							# val_accuracies.append(val_acc)
+						# print('Saving loss...')
+						# val_accs, _ = meta_validation(
+						#     datasubset=val_set,
+						#     num_val_tasks=num_val_tasks,
+						#     return_uncertainty=False)
+						# val_acc = np.mean(val_accs)
+						# val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
+						# print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
+						# val_accuracies.append(val_acc)
 
-							# train_accs, _ = meta_validation(
-							#     datasubset=train_set,
-							#     num_val_tasks=num_val_tasks,
-							#     return_uncertainty=False)
-							# train_acc = np.mean(train_accs)
-							# train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
-							# print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
-							# train_accuracies.append(train_acc)
-						
-						# reset meta loss
-						meta_loss = 0
+						# train_accs, _ = meta_validation(
+						#     datasubset=train_set,
+						#     num_val_tasks=num_val_tasks,
+						#     return_uncertainty=False)
+						# train_acc = np.mean(train_accs)
+						# train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
+						# print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
+						# train_accuracies.append(train_acc)
+					
+					# reset meta loss
+					meta_loss = 0
 
-					if (task_count >= self.num_tasks_per_epoch):
-						break
+				if (task_count >= self.num_tasks_per_epoch):
+					break
 			if ((epoch + 1)% self.num_epochs_save == 0):
 				checkpoint = {
 					'theta': self.theta,
@@ -234,6 +234,9 @@ class Bmaml(object):
 		for particle_id in range(self.num_particles):
 			w = get_weights_target_net(w_generated=self.theta, row_id=particle_id, w_target_shape=self.w_shape)
 			#chaser
+			#extract features
+			#parameters
+			#generate image
 			y_pred_t = self.net.forward(x=x_t, w=w, p_dropout=self.p_dropout_base)
 			loss_NLL_chaser = self.loss(y_pred_t, y_t)
 	
