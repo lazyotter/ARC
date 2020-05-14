@@ -1,8 +1,11 @@
 import json
 import os
 from pathlib import Path
+import copy
+
 import matplotlib.pyplot as plt
 from matplotlib import colors
+import numpy as np
 
 class Data(object):
 
@@ -66,5 +69,31 @@ class Data(object):
 			axs[row, 1].axis('off')	
 		plt.tight_layout()
 		plt.show()
+
+	def pad(self,data):
+		data1 = copy.deepcopy(data)
+
+		for img in data1['train']:
+			img['input'] = self.get_pad(img['input'])
+			img['output'] = self.get_pad(img['output'])
+
+		for img in data1['test']:
+			img['input'] = self.get_pad(img['input'])
+			if len(list(img.keys())) == 2:
+				img['output'] = self.get_pad(img['output'])
+
+		return data1
+
+
+	def get_pad(self,data):
+		left = (30 - len(data[0])) // 2
+		right = (left + 1) if (len(data[0]) % 2) else left
+		top = (30 - len(data)) // 2
+		bottom = (top + 1) if (len(data) % 2) else top
+		return np.pad(np.array(data), ((top, bottom), (left, right))).tolist()
+
+
+
+
 
 		
