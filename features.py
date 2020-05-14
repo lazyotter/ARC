@@ -1,3 +1,4 @@
+import torch
 import copy
 import numpy as np 
 
@@ -23,3 +24,12 @@ def scale_up2(data):
 				instance['output'] = np.kron(np.array(instance['output']), np.ones((scale, scale))).tolist()
 
 	return data
+
+
+def extract_features(images, output_size):
+	'''
+	http://arxiv.org/abs/1606.04080.pdf
+	:param output_size: dimensionality of the output features (global parameters)
+	'''
+
+	
