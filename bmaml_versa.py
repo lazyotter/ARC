@@ -9,6 +9,7 @@ from scipy.special import erf
 from sine_data_utils import get_num_weights, get_weights_target_net, get_task_sine_data
 from DataGeneratorT import DataGenerator
 from FCNet import FCNet
+from load_data import Data
 
 import os
 import sys
@@ -23,7 +24,7 @@ class Bmaml(object):
 				 #maybe get rid of test 
 				 test=False,
 				 inner_lr=1e-3, 
-				 num_inner_updates=5,
+				 num_inner_updates=0,
 				 meta_lr=1e-3,
 				 minibatch_size=10,
 				 num_epochs=1000,
@@ -34,10 +35,8 @@ class Bmaml(object):
 				 p_dropout_base=0):
 
 		self.num_training_samples_per_class = k
-		self.num_classes_per_task = n_way
 		#maybe + 3 for us depending on how this works
-		self.num_total_samples_per_class = k + 15
-		self.total_validation_samples = (self.num_total_samples_per_class - self.num_training_samples_per_class)*self.num_classes_per_task
+		self.num_total_samples_per_class = k + 1
 		self.train = train
 		self.test = test
 		self.inner_lr = inner_lr
@@ -102,18 +101,7 @@ class Bmaml(object):
 			lr = self.meta_lr)
 
 	def meta_train(self, train_subset='train'):
-		data_generator = DataGenerator(
-			num_samples = self.num_total_samples_per_class,
-			device = self.device)
-
-		#create dummy sampler
-		all_class = [0]*100
-		sampler = torch.utils.data.sampler.RandomSampler(data_source=all_class)
-		train_loader = torch.utils.data.DataLoader(
-			dataset=all_class,
-			batch_size=self.num_classes_per_task,
-			sampler=sampler,
-			drop_last=True)
+		data_loader = Data('./data')
 
 		print('Start to train...')
 		for epoch in range(0, self.num_epochs):
