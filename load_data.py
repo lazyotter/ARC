@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import copy
+import torch
 
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -35,11 +36,18 @@ class Data(object):
 
 		return data
 
-	def get_train_test(self, data):
-		x_t = [x['input'] for x in data['train']]
-		y_t = [x['output'] for x in data['train']]
-		x_v = [x['input'] for x in data['test']]
-		y_v = [x['output'] for x in data['test']]
+	def get_train_test(self, data, device):
+		#adding unsqueeze to see if it works
+		if device == torch.device('cuda:0'):
+			x_t = torch.cuda.FloatTensor([x['input'] for x in data['train']]).unsqueeze(1)
+			y_t = torch.cuda.FloatTensor([x['output'] for x in data['train']]).unsqueeze(1)
+			x_v = torch.cuda.FloatTensor([x['input'] for x in data['test']]).unsqueeze(1)
+			y_v = torch.cuda.FloatTensor([x['output'] for x in data['test']]).unsqueeze(1)
+		else:
+			x_t = torch.FloatTensor([x['input'] for x in data['train']]).unsqueeze(1)
+			y_t = torch.FloatTensor([x['output'] for x in data['train']]).unsqueeze(1)
+			x_v = torch.FloatTensor([x['input'] for x in data['test']]).unsqueeze(1)
+			y_v = torch.FloatTensor([x['output'] for x in data['test']]).unsqueeze(1)
 		return x_t, y_t, x_v, y_v
 
 
@@ -67,6 +75,19 @@ class Data(object):
 				axs[row, 1].set_title('Test output')
 
 			axs[row, 1].axis('off')	
+		plt.tight_layout()
+		plt.show()
+
+	def visualize_single(self, data):
+		cmap = colors.ListedColormap(['#000000', '#0074D9','#FF4136','#2ECC40','#FFDC00','#AAAAAA', '#F012BE', '#FF851B', '#7FDBFF', '#870C25'])
+		norm = colors.Normalize(vmin=0, vmax=9)
+		fig, axs = plt.subplots(len(data), 1, figsize=(9,9))
+		
+		for i, img in enumerate(data):
+			axs[i].imshow(img, cmap = cmap, norm = norm)
+			axs[i].axis('off')
+			axs[i].set_title('Train input')
+
 		plt.tight_layout()
 		plt.show()
 

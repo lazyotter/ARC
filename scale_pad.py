@@ -18,7 +18,7 @@ class Scaler(object):
 
 		for traintest in data:
 			for instance in data[traintest]:
-				scale = 30 // max(len(instance['input'][0]), len(instance['input']), len(instance['output'][0]), len(instance['output']))
+				scale = 32 // max(len(instance['input'][0]), len(instance['input']), len(instance['output'][0]), len(instance['output']))
 				instance['input'] = np.kron(np.array(instance['input']), np.ones((scale, scale))).tolist()
 				self.scale_amount[traintest].append(scale)
 				if len(list(instance.keys())) == 2:
@@ -44,9 +44,9 @@ class Scaler(object):
 		return data1
 
 	def get_pad(self,data,state):
-		left = (30 - len(data[0])) // 2
+		left = (32 - len(data[0])) // 2
 		right = (left + 1) if (len(data[0]) % 2) else left
-		top = (30 - len(data)) // 2
+		top = (32 - len(data)) // 2
 		bottom = (top + 1) if (len(data) % 2) else top
 
 		self.pad_amount[state].append([left, right, top, bottom])
