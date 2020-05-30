@@ -5,9 +5,10 @@ import collections
 
 def dense_layer(inputs, weights, layer, activation = 'relu'):
 	#the layers start from 1 here, but start from 0 in conv_layer
+	weight =weights['w{0:d}'.format(layer)].clone()
 	out = torch.nn.functional.linear(
 		input=inputs,
-		weight=weights['w{0:d}'.format(layer)],
+		weight=weight,
 		bias=weights['b{0:d}'.format(layer)]
 	)
 	if activation is not None:
@@ -15,9 +16,10 @@ def dense_layer(inputs, weights, layer, activation = 'relu'):
 	return out
 
 def conv_layer(inputs, weights, layer):
+	weight = weights['conv{0:d}'.format(layer + 1)].clone()
 	out = torch.nn.functional.conv2d(
 				input=inputs,
-				weight=weights['conv{0:d}'.format(layer + 1)],
+				weight=weight,
 				bias=weights['b{0:d}'.format(layer + 1)],
 				stride=1,
 				padding=1

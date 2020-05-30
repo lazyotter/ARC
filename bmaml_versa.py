@@ -143,6 +143,7 @@ class Bmaml(object):
 			lr = self.meta_lr)
 
 	def meta_train(self, train_subset='train'):
+		torch.autograd.set_detect_anomaly(True)
 		if train_subset == 'train':
 			train_data_loader = Data('./data', 'train')
 			train_data = train_data_loader.get_data()
