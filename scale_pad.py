@@ -8,7 +8,7 @@ class Scaler(object):
 		self.data = data
 		self.scale_amount = {'train': [], 'test': []}
 		self.pad_amount = {'train': [], 'test': []}
-		self.pad_scale_data = self.pad_scale()
+		self.final_data = self.pad_scale()
 
 	def scale_up(self, data = None):
 		if data == None:
@@ -56,5 +56,19 @@ class Scaler(object):
 	def pad_scale(self):
 		scaled_data = self.scale_up()
 		padded_scaled = self.pad(scaled_data)
+		normalized = self.normalize(padded_scaled)
 
-		return padded_scaled
+		return normalized
+
+	def normalize(self, data = None):
+		if data == None:
+			data = self.data
+
+		data = copy.deepcopy(data)
+
+		for traintest in data:
+			for instance in data[traintest]:
+				instance['input'] = (np.array(instance['input'])/9).tolist()
+				instance['output'] = (np.array(instance['output'])/9).tolist()
+
+		return data
