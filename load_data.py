@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import copy
 import torch
+import shapenet
 
 import matplotlib.pyplot as plt
 from matplotlib import colors
@@ -10,14 +11,15 @@ import numpy as np
 
 class Data(object):
 
-	def __init__(self, data_path, type):
+	def __init__(self, data_path, mode):
 
 		self.data_path = data_path
 		self.type = type
 		self.data = None
 		self.keys = None
+		self.mode = mode
 
-	def get_data(self):
+	def get_data(self, shapenet = False):
 		data = {}
 		
 		if self.type == 'test':
@@ -35,6 +37,14 @@ class Data(object):
 		self.keys = list(data.keys())
 
 		return data
+
+	def get_shapenet(self):
+		return shapenet.ShapeNetData(path='./data/shapenet',
+                                     train_fraction=0.7,
+                                     val_fraction=0.1,
+                                     num_instances_per_item=36,
+                                     seed=42,
+                                     mode=self.mode)
 
 	def get_train_test(self, data, device):
 		#adding unsqueeze to see if it works

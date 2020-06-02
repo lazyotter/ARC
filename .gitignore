@@ -1,1 +1,3 @@
 __pycache__/*.pyc
+data/shapenet/*.npy
+output/BMAML_versa_few_shot/BMAML_arc_1way_5shot/*.pt

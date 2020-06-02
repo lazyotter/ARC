@@ -135,7 +135,7 @@ class ConvNet(torch.nn.Module):
 		# extra layers for inference and generation. Bad coding but deal with it
 		#there are 8 other fully connected layers
 		#remove the for loop to deal with changing inputs for the fc layers
-		w_shape_fc['w1'] = (256, 512)
+		w_shape_fc['w1'] = (256, 259)
 		w_shape_fc['b1'] = 256
 		w_shape_fc['w2'] = (256, 256)
 		w_shape_fc['b2'] = 256
@@ -147,7 +147,9 @@ class ConvNet(torch.nn.Module):
 		w_shape_fc['b5'] = 256
 		w_shape_fc['w6'] = (256, 256)
 		w_shape_fc['b6'] = 256
-		w_shape_fc['w7'] = (512, 512)
+
+		#dense layers for gen_input
+		w_shape_fc['w7'] = (512, 259)
 		w_shape_fc['b7'] = 512
 		w_shape_fc['w8'] = (1024, 512)
 		w_shape_fc['b8'] = 1024
@@ -243,14 +245,15 @@ def sample_normal(mu, log_variance, num_samples, device):
 		eps = torch.zeros(shape.size(), device=torch.device('cpu:0')).normal_()
 	return mu + eps * torch.sqrt(torch.exp(log_variance))
 
-def gen_input(x, weights, features):
+def gen_input(x, weights, angles):
 	"""
 	generate input to the deconv layers by going through two linear layers
 	and reshaping.
 	"""
-	out = torch.cat((x, features), axis=1)
+
+	out = torch.cat((x, angles), axis=1)
 
 	out = dense_layer(out, weights, layer=7)
 	out = dense_layer(out, weights, layer=8)
-	out = out.view(len(features), 256, 2, -1)
+	out = out.view(len(angles), 256, 2, -1)
 	return out

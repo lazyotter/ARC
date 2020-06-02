@@ -1,8 +1,8 @@
 import torch
 from utilities import dense_layer, sample_normal
 
-def task_inference(in_features, out_features, weights, device, num_samples=1):
-	h = torch.cat((in_features, out_features), -1)
+def task_inference(in_features, angles, weights, device, num_samples=1):
+	h = torch.cat((in_features, angles), -1)
 
 	#dense layer before pooling
 	h = dense_layer(h, weights, layer = 1)

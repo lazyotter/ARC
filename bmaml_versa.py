@@ -175,7 +175,7 @@ class Bmaml(object):
 			#change to maybe do multiple tasks
 			for key in keys:
 				scaler = Scaler(train_data[key])
-				padded_data = scaler.pad_scale_data
+				padded_data = scaler.pad_scale()
 				x_t, y_t, x_v, y_v = train_data_loader.get_train_test(padded_data, device=self.device)
 
 				chaser, leader, chaser_loss = self.get_task_prediction(x_t, y_t, x_v, y_v)
@@ -507,7 +507,7 @@ class Bmaml(object):
 		return d2tensor
 
 	def predict(self, saved_checkpoint):
-		checkpoint = torch.load(saved_checkpoint, map_location=torch.device('cpu'))
+		checkpoint = torch.load(saved_checkpoint, map_location=self.device)
 		theta_enc = checkpoint['theta_enc']
 		theta_am = checkpoint['theta_am']
 
@@ -515,7 +515,7 @@ class Bmaml(object):
 		train_data = train_data_loader.get_data()
 		keys = train_data_loader.keys
 		scaler = Scaler(train_data[keys[0]])
-		padded_data = scaler.pad_scale_data
+		padded_data = scaler.pad_scale()
 		x_t, y_t, x_v, y_v = train_data_loader.get_train_test(padded_data, device=self.device)
 
 		y_pred = []
