@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from debugger import printer
 
 import collections
 
@@ -36,9 +37,10 @@ def conv_layer(inputs, weights, layer):
 
 def conv_transpose_layer(inputs, weights, layer, activation='relu'):
 	#layers start from 0
+	weight = weights['deconv{0:d}'.format(layer + 1)].clone()
 	out = torch.nn.functional.conv_transpose2d(
 		input=inputs,
-		weight=weights['deconv{0:d}'.format(layer + 1)],
+		weight=weight,
 		bias=weights['b{0:d}'.format(layer + 1)],
 		stride=2,
 		padding=1,
@@ -203,11 +205,6 @@ class ConvNet(torch.nn.Module):
 
 			return out
 
-
-
-
-
-
 def get_num_weights(my_net):
 	num_weights = 0
 	weight_shape, weight_shape_fc,  weight_shape_dec = my_net.get_weight_shape()
@@ -237,13 +234,19 @@ def sample_normal(mu, log_variance, num_samples, device):
 	:param num_samples: np scalar - number of samples to generate.
 	:return: tf tensor - samples from distribution of size num_samples x dim(mu).
 	"""
+	
 	shape = torch.unsqueeze(mu,0)
+
 	#shape = torch.cat((torch.FloatTensor(num_samples), mu), axis=-1)
 	if device == torch.device('cuda:0'):
 		eps = torch.zeros(shape.size(), device=torch.device('cuda:0')).normal_()
 	else:
 		eps = torch.zeros(shape.size(), device=torch.device('cpu:0')).normal_()
-	return mu + eps * torch.sqrt(torch.exp(log_variance))
+
+	clamped_variance = log_variance.clamp(max=88)
+	#make sure this is not zero
+	std = clamped_variance.mul(0.5).exp_()
+	return eps.mul(std).add_(mu)
 
 def gen_input(x, weights, angles):
 	"""

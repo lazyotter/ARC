@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 import os
+import torch
 
 """
    Supporting methods for data handling
@@ -28,7 +29,7 @@ def convert_index_to_angle(index, num_instances_per_item):
     return angle, np.sin(angle_radians), np.cos(angle_radians)
 
 
-class ShapeNetData(object):
+class ShapeNetData(torch.utils.data.Dataset):
     """
         Class to handle ShapeNet dataset. Loads from numpy data as saved in data folder.
     """
@@ -61,6 +62,8 @@ class ShapeNetData(object):
         self.instances_per_item = num_instances_per_item
         self.total_items = data.shape[0]
         self.mode = mode
+        self.source = None
+        self.shot = None
         train_size = (int) (train_fraction * self.total_items)
         val_size = (int) (val_fraction * self.total_items)
         print("Training Set Size = {0:d}".format(train_size))
@@ -76,9 +79,14 @@ class ShapeNetData(object):
         self.train_item_sets = np.max(self.train_item_indices)
         self.validation_item_sets = np.max(self.validation_item_indices)
         self.test_item_sets = np.max(self.test_item_indices)
-        if self.mode == 'test':
+        if self.mode == 'train':
+            self.indices = [i for i in range(len(self.train_item_indices))]
+        elif self.mode == 'validation':
+            self.indices = [i for i in range(len(self.validation_item_indices))]
+        elif self.mode == 'test':
             self.test_item_permutation = np.random.permutation(self.test_item_sets)
             self.test_counter = 0
+            self.indices = [i for i in range(len(self.test_item_indices))]
 
     def get_image_height(self):
         return self.image_height
@@ -112,7 +120,37 @@ class ShapeNetData(object):
         elif source == 'test':
             return self.__yield_random_task_batch(tasks_per_batch, self.test_images, self.test_item_angles,
                                                   self.test_item_indices, shot)
+    def prep_loader(self, source, shot):
+        '''
+        set data source
 
+        :param source: which set to draw from
+        '''
+        self.source = source
+        self.shot = shot
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, index):
+
+        #probably don't need this
+        ID = self.indices[index]
+
+        if self.mode == 'train':
+            images_train, images_test, labels_train, labels_test =\
+                self.__generateRandomTask(self.train_images, self.train_item_angles, self.train_item_indices, self.shot)
+
+        elif self.mode == 'validation':
+            images_train, images_test, labels_train, labels_test =\
+                self.__generateRandomTask(self.validation_images, self.validation_item_angles, self.validation_item_indices, self.shot)
+        
+        elif self.mode == 'test':
+            images_train, images_test, labels_train, labels_test =\
+                self.__generateRandomTask(self.test_images, self.test_item_angles, self.test_item_indices, self.shot)            
+
+        return images_train, images_test, labels_train, labels_test
+        
     def __yield_random_task_batch(self, num_tasks_per_batch, images, angles, item_indices, num_train_instances):
         """
         Generate a batch of tasks from image set.
