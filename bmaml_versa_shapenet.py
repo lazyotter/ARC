@@ -61,10 +61,10 @@ class Bmaml(object):
 		#Change this loss to some other kind of loss
 		self.loss = torch.nn.MSELoss()
 		#two thetas for two losses
-		self.theta_enc = []
-		self.theta_am = []
-		self.op_theta_enc = None
-		self.op_theta_am = None
+		self.theta_task = []
+		self.theta_global = []
+		self.op_theta_task = None
+		self.op_theta_global = None
 		self.w_shape = None
 		self.w_shape_fc = None
 		self.w_shape_dec = None
@@ -114,7 +114,8 @@ class Bmaml(object):
 				else:
 					theta_temp = torch.zeros(self.w_shape[key], device = self.device)
 				theta_flatten.append(torch.flatten(theta_temp, start_dim=0, end_dim=-1))
-			self.theta_enc.append(torch.cat(theta_flatten))
+			flattened_tensor = torch.cat(theta_flatten)
+			#self.theta_enc.append(torch.cat(theta_flatten))
 
 			theta_flatten = []
 			for key in self.w_shape_fc.keys():
@@ -125,9 +126,9 @@ class Bmaml(object):
 					theta_temp = torch.zeros(self.w_shape_fc[key], device = self.device)
 				#why end_dim = -1?
 				theta_flatten.append(torch.flatten(theta_temp, start_dim=0, end_dim=-1))
-			#check to make sure this copy is not being changed
-			flattened_tensor = torch.cat(theta_flatten)
-			#self.theta_am.append(torch.cat(theta_flatten))
+
+			#flattened_tensor = torch.cat(theta_flatten)
+			self.theta_task.append(torch.cat((flattened_tensor, torch.cat(theta_flatten))))
 
 			theta_flatten = []
 			for key in self.w_shape_dec.keys():
@@ -138,24 +139,25 @@ class Bmaml(object):
 					theta_temp = torch.zeros(self.w_shape_dec[key], device = self.device)
 				theta_flatten.append(torch.flatten(theta_temp, start_dim=0, end_dim=-1))
 			#hopefully this works, it may have messed up the indexing
-			self.theta_am.append(torch.cat((flattened_tensor,torch.cat(theta_flatten))))
+			#self.theta_am.append(torch.cat((flattened_tensor,torch.cat(theta_flatten))))
+			self.theta_global.append(torch.cat(theta_flatten))
 
-		self.theta_enc = torch.stack(self.theta_enc)
-		self.theta_am = torch.stack(self.theta_am)
-		self.theta_enc.requires_grad_()
-		self.theta_am.requires_grad_()
-		self.op_theta_enc = torch.optim.Adam(
-			params=[self.theta_enc],
+		self.theta_task = torch.stack(self.theta_task)
+		self.theta_global = torch.stack(self.theta_global)
+		self.theta_task.requires_grad_()
+		self.theta_global.requires_grad_()
+		self.op_theta_task = torch.optim.Adam(
+			params=[self.theta_task],
 			lr = self.meta_lr)
 		#change lr to another SVDM lr
-		self.op_theta_am = torch.optim.Adam(
-			params=[self.theta_am],
+		self.op_theta_global = torch.optim.Adam(
+			params=[self.theta_global],
 			lr = self.meta_lr)
 		self.scheduler_enc = torch.optim.lr_scheduler.ExponentialLR(
-			optimizer=self.op_theta_enc,
+			optimizer=self.op_theta_task,
 			gamma=self.lr_decay)
 		self.scheduler_am = torch.optim.lr_scheduler.ExponentialLR(
-			optimizer=self.op_theta_am,
+			optimizer=self.op_theta_global,
 			gamma=self.lr_decay)
 
 	def load_data(self, train_subset='train'):
@@ -193,146 +195,147 @@ class Bmaml(object):
 		'''
 		Training function for model
 		'''
-		#with GuruMeditation():
+		with GuruMeditation():
 	
 
-		print('Start to train...')
-		for epoch in range(0, self.num_epochs):
-			#variables for monitoring
-			meta_loss_saved = []
-			enc_loss_saved = []
-			val_accuracies = []
-			train_accuracies = []
+			print('Start to train...')
+			for epoch in range(0, self.num_epochs):
+				#variables for monitoring
+				meta_loss_saved = []
+				enc_loss_saved = []
+				val_accuracies = []
+				train_accuracies = []
 
-			meta_loss = 0 #accumulate the loss of many ensembling networks
-			enc_loss = 0 #accumulate the loss of the encoder network
-			num_meta_updates_count = 0
+				meta_loss = 0 #accumulate the loss of many ensembling networks
+				enc_loss = 0 #accumulate the loss of the encoder network
+				num_meta_updates_count = 0
 
-			meta_loss_avg_print = 0
-			enc_loss_avg_print = 0
-			#meta_mse_avg_print = 0
+				meta_loss_avg_print = 0
+				enc_loss_avg_print = 0
+				#meta_mse_avg_print = 0
 
-			meta_loss_avg_save = []
-			enc_loss_avg_save = []
-			#meta_mse_avg_save = []
+				meta_loss_avg_save = []
+				enc_loss_avg_save = []
+				#meta_mse_avg_save = []
 
-			task_count = 0
+				task_count = 0
 
-			self.get_batches(16)
+				self.get_batches(16)
 
-			for i in range(self.inputs[0].size(0)):
+				for i in range(self.inputs[0].size(0)):
 
-				chaser, leader, chaser_loss = self.get_task_prediction(inputs=[x[i] for x in self.inputs])
-				loss_NLL = self.get_meta_loss(chaser, leader)
-				print(chaser_loss)
-				printer(chaser_loss, 'chaser_loss')
-				printer(loss_NLL, 'loss_NLL')
+					chaser, leader, chaser_loss = self.get_task_prediction(inputs=[x[i] for x in self.inputs])
+					loss_NLL = self.get_meta_loss(chaser, leader)
+					print(chaser_loss)
+					printer(chaser_loss, 'chaser_loss')
+					printer(loss_NLL, 'loss_NLL')
 
-				#meta_loss = meta_loss + loss_NLL
-				#enc_loss = enc_loss + chaser_loss
-				printer(meta_loss, 'meta_loss')
-				printer(enc_loss, 'enc_loss')
-				#meta_mse = self.loss(y_pred, y_v)
+					meta_loss = meta_loss + loss_NLL
+					#enc_loss = enc_loss + chaser_loss
+					printer(meta_loss, 'meta_loss')
+					printer(enc_loss, 'enc_loss')
+					#meta_mse = self.loss(y_pred, y_v)
 
-				task_count = task_count + 1
+					task_count = task_count + 1
 
-				#SHOULD I INCLUDE THIS DIVISION??
-				#meta_loss = meta_loss/len(self.inputs[0])
-				#enc_loss = enc_loss/len(self.inputs[0])
-				#meta_mse = meta_mse/self.num_tasks_per_minibatch
+					#SHOULD I INCLUDE THIS DIVISION??
+					#meta_loss = meta_loss/len(self.inputs[0])
+					#enc_loss = enc_loss/len(self.inputs[0])
+					#meta_mse = meta_mse/self.num_tasks_per_minibatch
 
-				# accumulate into different variables for printing purpose
-				meta_loss_avg_print += loss_NLL.data
-				enc_loss_avg_print += chaser_loss.data
-				#meta_mse_avg_print += meta_mse.item()
+					# accumulate into different variables for printing purpose
+					meta_loss_avg_print += loss_NLL.data
+					enc_loss_avg_print += chaser_loss.data
+					#meta_mse_avg_print += meta_mse.item()
 
-				#THINK ABOUT IF THESE TWO LOSS FUNCTIONS ARE ACCOMPLISHING DIFFERENT THINGS
-				#SHOULD WE RESET META_LOSS SO THAT theta_am IS LEARNING ONLY FOR EACH TASK?
-				#IS theta_am REALLY JUST TASK SPECIFIC? SHOULD IT BE? ACCORDING TO BMAML
+					#THINK ABOUT IF THESE TWO LOSS FUNCTIONS ARE ACCOMPLISHING DIFFERENT THINGS
+					#SHOULD WE RESET META_LOSS SO THAT theta_am IS LEARNING ONLY FOR EACH TASK?
+					#IS theta_am REALLY JUST TASK SPECIFIC? SHOULD IT BE? ACCORDING TO BMAML
 
-				self.op_theta_am.zero_grad()
-				chaser_loss.backward(retain_graph=True)
-				self.op_theta_am.step()
+					self.op_theta_task.zero_grad()
+					chaser_loss.backward(retain_graph=True)
+					self.op_theta_task.step()
 
-				printer(self.theta_enc, 'theta_enc')
-				printer(self.theta_am, 'theta_am')
+					printer(self.theta_task, 'theta_task')
+					printer(self.theta_global, 'theta_global')
 
-				# Printing losses
-				num_meta_updates_count += 1
-				if (num_meta_updates_count % self.num_meta_updates_print == 0):
-					meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
-					enc_loss_avg_save.append(enc_loss_avg_print/num_meta_updates_count)
+					# Printing losses
+					num_meta_updates_count += 1
+					if (num_meta_updates_count % self.num_meta_updates_print == 0):
+						meta_loss_avg_save.append(meta_loss_avg_print/num_meta_updates_count)
+						enc_loss_avg_save.append(enc_loss_avg_print/num_meta_updates_count)
 
-					#meta_mse_avg_save.append(meta_mse_avg_print/num_meta_updates_count)
-					print('{0:d}, {1:2.4f}, {1:2.4f}'.format(
-						task_count,
-						meta_loss_avg_save[-1],
-						enc_loss_avg_save[-1]
-						#meta_mse_avg_save[-1]
-					))
+						#meta_mse_avg_save.append(meta_mse_avg_print/num_meta_updates_count)
+						print('{0:d}, {1:2.4f}, {1:2.4f}'.format(
+							task_count,
+							meta_loss_avg_save[-1],
+							enc_loss_avg_save[-1]
+							#meta_mse_avg_save[-1]
+						))
 
-					num_meta_updates_count = 0
-					meta_loss_avg_print = 0
-					enc_loss_avg_print = 0
-					#meta_mse_avg_print = 0
-				
-				if (task_count % self.num_tasks_save_loss == 0):
-					meta_loss_saved.append(np.mean(meta_loss_avg_save))
-					enc_loss_saved.append(np.mean(enc_loss_avg_save))
+						num_meta_updates_count = 0
+						meta_loss_avg_print = 0
+						enc_loss_avg_print = 0
+						#meta_mse_avg_print = 0
+					
+					if (task_count % self.num_tasks_save_loss == 0):
+						meta_loss_saved.append(np.mean(meta_loss_avg_save))
+						enc_loss_saved.append(np.mean(enc_loss_avg_save))
 
-					meta_loss_avg_save = []
-					enc_loss_avg_save = []
-					#meta_mse_avg_save = []
+						meta_loss_avg_save = []
+						enc_loss_avg_save = []
+						#meta_mse_avg_save = []
 
-					# print('Saving loss...')
-					# val_accs, _ = meta_validation(
-					#     datasubset=val_set,
-					#     num_val_tasks=num_val_tasks,
-					#     return_uncertainty=False)
-					# val_acc = np.mean(val_accs)
-					# val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
-					# print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
-					# val_accuracies.append(val_acc)
+						# print('Saving loss...')
+						# val_accs, _ = meta_validation(
+						#     datasubset=val_set,
+						#     num_val_tasks=num_val_tasks,
+						#     return_uncertainty=False)
+						# val_acc = np.mean(val_accs)
+						# val_ci95 = 1.96*np.std(val_accs)/np.sqrt(num_val_tasks)
+						# print('Validation accuracy = {0:2.4f} +/- {1:2.4f}'.format(val_acc, val_ci95))
+						# val_accuracies.append(val_acc)
 
-					# train_accs, _ = meta_validation(
-					#     datasubset=train_set,
-					#     num_val_tasks=num_val_tasks,
-					#     return_uncertainty=False)
-					# train_acc = np.mean(train_accs)
-					# train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
-					# print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
-					# train_accuracies.append(train_acc)
-				
-				# reset meta loss
-				#DO I HAVE TO RESET LOSS?
-				#meta_loss = 0
-				#enc_loss = 0
-			self.op_theta_enc.zero_grad()
-			chaser_loss.backward(retain_graph=True)
-			self.op_theta_enc.step()
-#			if (task_count >= self.num_tasks_per_epoch):
-#				break
-			if ((epoch + 1)% self.num_epochs_save == 0):
-				checkpoint = {
-					'theta_am': self.theta_am,
-					'theta_enc': self.theta_enc,
-					'meta_loss': meta_loss_saved,
-					'enc_loss': enc_loss_saved,
-					'val_accuracy': val_accuracies,
-					'train_accuracy': train_accuracies,
-					'op_theta': self.op_theta_am.state_dict()
-				}
-				print('SAVING WEIGHTS...')
-				checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
-							.format('shapenet',
-									self.num_classes_per_task,
-									self.num_training_samples_per_class,
-									epoch + 1)
-				print(checkpoint_filename)
-				torch.save(checkpoint, os.path.join(self.dst_folder, checkpoint_filename))
-				print(checkpoint['meta_loss'])
-				print(checkpoint['enc_loss'])
-			print()
+						# train_accs, _ = meta_validation(
+						#     datasubset=train_set,
+						#     num_val_tasks=num_val_tasks,
+						#     return_uncertainty=False)
+						# train_acc = np.mean(train_accs)
+						# train_ci95 = 1.96*np.std(train_accs)/np.sqrt(num_val_tasks)
+						# print('Train accuracy = {0:2.4f} +/- {1:2.4f}\n'.format(train_acc, train_ci95))
+						# train_accuracies.append(train_acc)
+					
+					# reset meta loss
+					#DO I HAVE TO RESET LOSS?
+					#meta_loss = 0
+					#enc_loss = 0
+				meta_loss = meta_loss / self.inputs[0].size(0)
+				self.op_theta_global.zero_grad()
+				meta_loss.backward(retain_graph=True)
+				self.op_theta_global.step()
+	#			if (task_count >= self.num_tasks_per_epoch):
+	#				break
+				if ((epoch + 1)% self.num_epochs_save == 0):
+					checkpoint = {
+						'theta_global': self.theta_global,
+						'theta_task': self.theta_task,
+						'meta_loss': meta_loss_saved,
+						'enc_loss': enc_loss_saved,
+						'val_accuracy': val_accuracies,
+						'train_accuracy': train_accuracies,
+						'op_theta': self.op_theta_global.state_dict()
+					}
+					print('SAVING WEIGHTS...')
+					checkpoint_filename = ('{0:s}_{1:d}way_{2:d}shot_{3:d}.pt')\
+								.format('shapenet',
+										self.num_classes_per_task,
+										self.num_training_samples_per_class,
+										epoch + 1)
+					print(checkpoint_filename)
+					torch.save(checkpoint, os.path.join(self.dst_folder, checkpoint_filename))
+					print(checkpoint['meta_loss'])
+					print(checkpoint['enc_loss'])
+				print()
 
 	def get_task_prediction(self, inputs):
 		'''
@@ -371,7 +374,7 @@ class Bmaml(object):
 		self.d_NLL['chaser'] = []
 		self.d_NLL['leader'] = []
 		for particle_id in range(self.num_particles):
-			w_enc = get_weights_target_net(w_generated=self.theta_enc, row_id=particle_id, w_target_shape=self.w_shape)
+			w_enc = get_weights_target_net(w_generated=self.theta_task, row_id=particle_id, w_target_shape=self.w_shape)
 			printer(w_enc, 'w_enc')
 			#chaser
 
@@ -380,16 +383,16 @@ class Bmaml(object):
 			printer(in_features, 'in_features')
 
 			#parameters
-			w_fc = get_weights_target_net(w_generated=self.theta_am, row_id=particle_id, w_target_shape=self.w_shape_fc)
+			w_fc = get_weights_target_net(w_generated=self.theta_task, row_id=particle_id, w_target_shape=self.w_shape_fc)
 			printer(w_fc, 'w_fc')
 
 			#generate parameters
-			task_vector = self.gen_params(in_features, train_angles, test_angles, w_fc, len(test_images))
+			task_vector, task_params = self.gen_params(in_features, train_angles, test_angles, w_fc, len(test_images))
 			sample_log_py = []
 			printer(task_vector, 'task_vector')
 
 			#generate images
-			w_deconv = get_weights_target_net(w_generated=self.theta_am, row_id=particle_id, w_target_shape=self.w_shape_dec)
+			w_deconv = get_weights_target_net(w_generated=self.theta_global, row_id=particle_id, w_target_shape=self.w_shape_dec)
 			printer(w_deconv, 'w_deconv')
 
 			y_pred_t = self.net.forward(x=task_vector, w=w_deconv, deconv=True, p_dropout=self.p_dropout_base,)
@@ -403,10 +406,11 @@ class Bmaml(object):
 			printer(test_images_t_flat, 'test_images_t_flat')
 
 			#loss_NLL_chaser = self.loss(torch.nn.functional.log_softmax(y_pred_t_flat), torch.nn.functional.softmax(test_images_flat))
-			loss_NLL_chaser = self.loss(y_pred_t_flat, test_images_t_flat)
+			#loss_NLL_chaser = self.loss(y_pred_t_flat, test_images_t_flat)
+			loss_NLL_chaser = self.loss_fn(y_pred_t_flat, test_images_t_flat, task_params['mu'], task_params['log_variance'])
 			printer(loss_NLL_chaser, 'loss_NLL_chaser')
 
-			self.append_gradients(loss_NLL_chaser, w_fc, w_deconv, type='chaser')
+			self.append_gradients(loss_NLL_chaser, w_enc, w_fc, type='chaser')
 			printer(self.d_NLL, 'd_NLL')			
 
 			#leader
@@ -422,18 +426,18 @@ class Bmaml(object):
 			printer(in_features, 'in_features')
 
 			#parameters
-			w_fc = get_weights_target_net(w_generated=self.theta_am, row_id=particle_id, w_target_shape=self.w_shape_fc)
+			w_fc = get_weights_target_net(w_generated=self.theta_task, row_id=particle_id, w_target_shape=self.w_shape_fc)
 			printer(w_fc, 'w_fc')
 
 			#generate parameters
-			task_vector = self.gen_params(in_features, train_angles, test_angles, w_fc,
+			task_vector, task_params = self.gen_params(in_features, train_angles, test_angles, w_fc,
 									 len(torch.cat((test_images,val_test_images),0)),
 									 val_train_angles, val_test_angles, val_test_images)
 			sample_log_py = []
 			printer(task_vector, 'task_vector')
 
 			#generate images
-			w_deconv = get_weights_target_net(w_generated=self.theta_am, row_id=particle_id, w_target_shape=self.w_shape_dec)
+			w_deconv = get_weights_target_net(w_generated=self.theta_global, row_id=particle_id, w_target_shape=self.w_shape_dec)
 			printer(w_deconv, 'w_deconv')
 
 			y_pred = self.net.forward(x=task_vector, w=w_deconv, deconv=True, p_dropout=self.p_dropout_base)
@@ -447,22 +451,23 @@ class Bmaml(object):
 			printer(test_images_flat, 'test_images_flat')
 
 			#loss_NLL_leader = self.loss(torch.nn.functional.log_softmax(y_pred_flat), torch.nn.functional.softmax(test_images_flat))
-			loss_NLL_leader = self.loss(y_pred_flat, test_images_flat)
+			#loss_NLL_leader = self.loss(y_pred_flat, test_images_flat)
+			loss_NLL_leader = self.loss_fn(y_pred_flat, test_images_flat, task_params['mu'], task_params['log_variance'])
 			printer(loss_NLL_leader, 'loss_NLL_leader')
 
-			self.append_gradients(loss_NLL_leader, w_fc, w_deconv, type='leader')
+			self.append_gradients(loss_NLL_leader, w_enc, w_fc, type='leader')
 			printer(self.d_NLL, 'd_NLL')
 
 		self.d_NLL['chaser'] = torch.stack(self.d_NLL['chaser'])
 		self.d_NLL['leader'] = torch.stack(self.d_NLL['leader'])
 		printer(self.d_NLL, 'd_NLL')
 
-		kernel_matrix, grad_kernel, _ = self.get_kernel(particle_tensor=self.theta_am)
+		kernel_matrix, grad_kernel, _ = self.get_kernel(particle_tensor=self.theta_task)
 		printer(kernel_matrix, 'kernel_matrix')
 		printer(grad_kernel, 'grad_kernel')
 
-		q_chaser = self.theta_am - self.inner_lr*(torch.matmul(kernel_matrix, self.d_NLL['chaser']) - grad_kernel)
-		q_leader = self.theta_am - self.inner_lr*(torch.matmul(kernel_matrix, self.d_NLL['leader']) - grad_kernel)
+		q_chaser = self.theta_task - self.inner_lr*(torch.matmul(kernel_matrix, self.d_NLL['chaser']) - grad_kernel)
+		q_leader = self.theta_task - self.inner_lr*(torch.matmul(kernel_matrix, self.d_NLL['leader']) - grad_kernel)
 		printer(q_chaser, 'q_chaser')
 		printer(q_leader, 'q_leader')
 
@@ -634,7 +639,7 @@ class Bmaml(object):
 			task_vector = gen_input(task_vector, w_fc, test_angle_tensor)
 			printer(task_vector, 'task_vector val post generation')
 
-		return task_vector
+		return task_vector, task_params
 
 	def append_gradients(self, loss, w_fc, w_deconv, type):
 		'''
@@ -672,11 +677,17 @@ class Bmaml(object):
 		#should I concatenate or stack?
 		self.d_NLL[type].append(torch.cat((NLL_gradients_tensor_fc, NLL_gradients_tensor_deconv)))
 
+	def loss_fn(self, recon_x, x, mu, logvar):
+		#BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, size_average=False)
+		#KLD = 0.5 * torch.sum(torch.exp(logvar) + mu**2 - 1. - logvar)
+		BCE = torch.nn.BCELoss()(recon_x, x)
+		return BCE
+
 
 	def predict(self, saved_checkpoint):
 		checkpoint = torch.load(saved_checkpoint, map_location=self.device)
-		theta_enc = checkpoint['theta_enc']
-		theta_am = checkpoint['theta_am']
+		theta_task = checkpoint['theta_task']
+		theta_global = checkpoint['theta_global']
 
 		train_data_loader = Data('./data', mode='test')
 		shapenet_data = train_data_loader.get_shapenet()
@@ -694,14 +705,14 @@ class Bmaml(object):
 
 		y_pred = []
 		for particle_id in range(self.num_particles):
-			w_enc = get_weights_target_net(w_generated=theta_enc, row_id=particle_id, w_target_shape=self.w_shape)
+			w_enc = get_weights_target_net(w_generated=theta_task, row_id=particle_id, w_target_shape=self.w_shape)
 			#chaser
 
 			#extract features
 			in_features = self.net.forward(x=batch_train_images, w=w_enc)
 			
 			#parameters
-			w_fc = get_weights_target_net(w_generated=theta_am, row_id=particle_id, w_target_shape=self.w_shape_fc)
+			w_fc = get_weights_target_net(w_generated=theta_task, row_id=particle_id, w_target_shape=self.w_shape_fc)
 			task_params = task_inference(in_features, batch_train_angles, weights=w_fc, device=self.device)
 			
 			#generate image
@@ -710,7 +721,7 @@ class Bmaml(object):
 			#repeat this for the batch, CHECK IF REPEAT TENSOR IS THE RIGHT SIZE
 			task_vector = task_vector.repeat(len(batch_test_images), 1)
 			task_vector = gen_input(task_vector, w_fc, batch_test_angles)
-			w_deconv = get_weights_target_net(w_generated=self.theta_am, row_id=particle_id, w_target_shape=self.w_shape_dec)
+			w_deconv = get_weights_target_net(w_generated=self.theta_global, row_id=particle_id, w_target_shape=self.w_shape_dec)
 			y_pred_t = self.net.forward(x=task_vector, w=w_deconv, deconv=True, p_dropout=self.p_dropout_base,)
 			y_pred.append(y_pred_t)
 
